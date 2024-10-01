@@ -3,3 +3,4 @@ requests
 beautifulsoup4
 python-docx
 deep-translator
+reportlab
