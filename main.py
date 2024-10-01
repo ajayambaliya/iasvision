@@ -2,15 +2,15 @@ import requests
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 from docx import Document
-from docx.shared import Pt
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 import os
 import pypandoc
-from deep_translator import GoogleTranslator  # Import the deep translator
+from deep_translator import GoogleTranslator
+import subprocess
 
-# Telegram bot credentials
-BOT_TOKEN = "1637529837:AAFraGS_WwfTV8rj9XOhBy7PoxnbnVXBVEM"
-CHAT_ID = "@gujtest"  # Use the channel handle, like "@yourchannel" or the actual chat ID
+# Load environment variables for bot token and chat ID
+BOT_TOKEN = os.getenv('BOT_TOKEN')
+CHAT_ID = os.getenv('CHAT_ID')
 
 # Define base URL
 base_url = "https://visionias.in/current-affairs/"
@@ -141,11 +141,21 @@ file_name = f"visionias_current_affairs_{previous_date}.docx"
 doc.save(file_name)
 print(f"Document saved as {file_name}")
 
-# Convert DOCX to PDF using pypandoc
+# Convert DOCX to PDF using pypandoc with XeLaTeX and a Gujarati-compatible font
 def convert_docx_to_pdf(docx_file, pdf_file):
-    output = pypandoc.convert_file(docx_file, 'pdf', outputfile=pdf_file)
-    assert output == "", "Conversion failed"
-    print(f"Document converted to PDF: {pdf_file}")
+    # Specify the command-line arguments for pandoc to use xelatex and a specific font
+    extra_args = [
+        "--pdf-engine=xelatex",
+        "-V", "mainfont=Noto Sans Gujarati",  # Replace with an available Gujarati font
+        "-V", "geometry:margin=1in"  # Set margins, optional
+    ]
+
+    try:
+        output = pypandoc.convert_file(docx_file, 'pdf', outputfile=pdf_file, extra_args=extra_args)
+        assert output == "", "Conversion failed"
+        print(f"Document converted to PDF: {pdf_file}")
+    except RuntimeError as e:
+        print(f"An error occurred: {e}")
 
 # Convert DOCX to PDF
 pdf_file_name = f"visionias_current_affairs_{previous_date}.pdf"
