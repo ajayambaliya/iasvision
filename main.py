@@ -140,14 +140,15 @@ file_name = f"visionias_current_affairs_{previous_date}.docx"
 doc.save(file_name)
 print(f"Document saved as {file_name}")
 
-# Convert DOCX to PDF using pypandoc with XeLaTeX and separate fonts for English and Gujarati
+# Convert DOCX to PDF using pypandoc with XeLaTeX and specific fonts
 def convert_docx_to_pdf(docx_file, pdf_file):
     # Specify the command-line arguments for pandoc to use xelatex and specific fonts for English and Gujarati
     extra_args = [
         "--pdf-engine=xelatex",
         "-V", "mainfont=Noto Sans",  # Font for English text
         "-V", "CJKmainfont=Noto Sans Gujarati",  # Font for Gujarati text
-        "-V", "geometry:margin=1in"  # Set margins
+        "-V", "geometry:margin=1in",  # Set margins
+        "-V", "lang=en-US"  # Avoid defaulting to Chinese/Asian languages
     ]
 
     try:
