@@ -48,9 +48,9 @@ document_id = document.get('documentId')
 # Google Translator
 translator = GoogleTranslator(source='auto', target='gu')
 
-# Function to batch updates and send them to Google Docs
-def batch_update_to_docs(requests_batch):
-    """Helper function to batch update Google Docs to avoid hitting rate limits."""
+# Function to format and add content to Google Docs
+def format_and_add_to_docs(requests_batch):
+    """Helper function to format and send batched content to Google Docs."""
     if requests_batch:
         try:
             docs_service.documents().batchUpdate(documentId=document_id, body={'requests': requests_batch}).execute()
@@ -58,6 +58,65 @@ def batch_update_to_docs(requests_batch):
             print(f"Error while updating Google Docs: {e}")
         # Sleep briefly to avoid hitting the rate limit
         time.sleep(1)
+
+def create_section_separator(requests_batch):
+    """Helper function to add a separator between sections."""
+    requests_batch.append({
+        'insertText': {
+            'location': {'index': 1},
+            'text': "\n---\n\n"
+        }
+    })
+
+def add_title(requests_batch, title_text):
+    """Add a title (translated and original) to the document."""
+    requests_batch.append({
+        'insertText': {
+            'location': {'index': 1},
+            'text': f"{title_text}\n"
+        }
+    })
+    requests_batch.append({
+        'updateParagraphStyle': {
+            'range': {'startIndex': 1, 'endIndex': 1 + len(title_text)},
+            'paragraphStyle': {'namedStyleType': 'HEADING_1'},
+            'fields': 'namedStyleType'
+        }
+    })
+
+def add_subheading(requests_batch, subheading_text):
+    """Add a subheading (translated and original) to the document."""
+    requests_batch.append({
+        'insertText': {
+            'location': {'index': 1},
+            'text': f"{subheading_text}\n"
+        }
+    })
+    requests_batch.append({
+        'updateParagraphStyle': {
+            'range': {'startIndex': 1, 'endIndex': 1 + len(subheading_text)},
+            'paragraphStyle': {'namedStyleType': 'HEADING_2'},
+            'fields': 'namedStyleType'
+        }
+    })
+
+def add_paragraph(requests_batch, paragraph_text):
+    """Add a regular paragraph to the document."""
+    requests_batch.append({
+        'insertText': {
+            'location': {'index': 1},
+            'text': f"{paragraph_text}\n"
+        }
+    })
+
+def add_list_item(requests_batch, list_item_text):
+    """Add a list item to the document."""
+    requests_batch.append({
+        'insertText': {
+            'location': {'index': 1},
+            'text': f"• {list_item_text}\n"
+        }
+    })
 
 # Function to scrape content from URL and add to Google Docs
 def scrap_and_add_content_to_docs(url):
@@ -72,35 +131,9 @@ def scrap_and_add_content_to_docs(url):
         title = content_area.find('h1').get_text()
         translated_title = translator.translate(title)
         
-        # Add Gujarati Title (Heading 1)
-        requests_batch.append({
-            'insertText': {
-                'location': {'index': 1},
-                'text': f"{translated_title}\n"
-            }
-        })
-        requests_batch.append({
-            'updateParagraphStyle': {
-                'range': {'startIndex': 1, 'endIndex': 1 + len(translated_title)},
-                'paragraphStyle': {'namedStyleType': 'HEADING_1'},
-                'fields': 'namedStyleType'
-            }
-        })
-
-        # Add English Title (Heading 1)
-        requests_batch.append({
-            'insertText': {
-                'location': {'index': 1},
-                'text': f"{title}\n"
-            }
-        })
-        requests_batch.append({
-            'updateParagraphStyle': {
-                'range': {'startIndex': 1 + len(translated_title), 'endIndex': 1 + len(translated_title) + len(title)},
-                'paragraphStyle': {'namedStyleType': 'HEADING_1'},
-                'fields': 'namedStyleType'
-            }
-        })
+        # Add Title (both Gujarati and English)
+        add_title(requests_batch, translated_title)
+        add_title(requests_batch, title)
 
         # Find article content under the <div id="article-content">
         article_content = content_area.find('div', id='article-content')
@@ -110,86 +143,43 @@ def scrap_and_add_content_to_docs(url):
                     paragraph_text = element.get_text()
                     translated_paragraph = translator.translate(paragraph_text)
 
-                    # Add translated Gujarati paragraph
-                    requests_batch.append({
-                        'insertText': {
-                            'location': {'index': 1},
-                            'text': f"{translated_paragraph}\n"
-                        }
-                    })
-
-                    # Add original English paragraph
-                    requests_batch.append({
-                        'insertText': {
-                            'location': {'index': 1},
-                            'text': f"{paragraph_text}\n"
-                        }
-                    })
+                    # Add paragraphs (Gujarati and English)
+                    add_paragraph(requests_batch, translated_paragraph)
+                    add_paragraph(requests_batch, paragraph_text)
 
                 elif element.name == 'h2':
                     sub_heading_text = element.get_text()
                     translated_sub_heading = translator.translate(sub_heading_text)
 
-                    # Add translated Gujarati sub-heading
-                    requests_batch.append({
-                        'insertText': {
-                            'location': {'index': 1},
-                            'text': f"{translated_sub_heading}\n"
-                        }
-                    })
-
-                    # Add original English sub-heading
-                    requests_batch.append({
-                        'insertText': {
-                            'location': {'index': 1},
-                            'text': f"{sub_heading_text}\n"
-                        }
-                    })
+                    # Add subheadings (Gujarati and English)
+                    add_subheading(requests_batch, translated_sub_heading)
+                    add_subheading(requests_batch, sub_heading_text)
 
                 elif element.name == 'ul':
+                    # Unordered list
                     for li in element.find_all('li'):
                         list_item_text = li.get_text()
                         translated_list_item = translator.translate(list_item_text)
 
-                        # Add translated Gujarati list item
-                        requests_batch.append({
-                            'insertText': {
-                                'location': {'index': 1},
-                                'text': f"• {translated_list_item}\n"
-                            }
-                        })
-
-                        # Add original English list item
-                        requests_batch.append({
-                            'insertText': {
-                                'location': {'index': 1},
-                                'text': f"• {list_item_text}\n"
-                            }
-                        })
+                        # Add list items (Gujarati and English)
+                        add_list_item(requests_batch, translated_list_item)
+                        add_list_item(requests_batch, list_item_text)
 
                 elif element.name == 'ol':
+                    # Ordered list
                     for index, li in enumerate(element.find_all('li'), 1):
                         list_item_text = li.get_text()
                         translated_list_item = translator.translate(list_item_text)
 
-                        # Add translated Gujarati ordered list item
-                        requests_batch.append({
-                            'insertText': {
-                                'location': {'index': 1},
-                                'text': f"{index}. {translated_list_item}\n"
-                            }
-                        })
+                        # Add ordered list items (Gujarati and English)
+                        add_paragraph(requests_batch, f"{index}. {translated_list_item}")
+                        add_paragraph(requests_batch, f"{index}. {list_item_text}")
 
-                        # Add original English ordered list item
-                        requests_batch.append({
-                            'insertText': {
-                                'location': {'index': 1},
-                                'text': f"{index}. {list_item_text}\n"
-                            }
-                        })
+        # Add a separator between each post
+        create_section_separator(requests_batch)
 
         # Send all collected updates for this URL in a single batch request
-        batch_update_to_docs(requests_batch)
+        format_and_add_to_docs(requests_batch)
 
 # Iterate over unique URLs and scrape content
 for url in unique_urls:
