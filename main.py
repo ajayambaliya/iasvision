@@ -2,25 +2,25 @@ import requests
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 from deep_translator import GoogleTranslator
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+from reportlab.lib.units import inch
+from reportlab.lib import colors
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfbase import pdfmetrics
 import os
-from googleapiclient.discovery import build
-from google.oauth2 import service_account
 
 # Telegram bot credentials
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 CHAT_ID = os.getenv('CHAT_ID')
 
-# Google API setup
-SCOPES = ['https://www.googleapis.com/auth/drive', 'https://www.googleapis.com/auth/documents']
-SERVICE_ACCOUNT_FILE = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
-
-# Set up Google Docs and Drive API
-credentials = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-docs_service = build('docs', 'v1', credentials=credentials)
-drive_service = build('drive', 'v3', credentials=credentials)
+# Set up Google Translator for Gujarati
+translator = GoogleTranslator(source='auto', target='gu')
 
 # Define base URL
 base_url = "https://visionias.in/current-affairs/"
+
+# Get the previous date in 'yyyy-mm-dd' format
 previous_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
 
 # Send GET request to the base URL
@@ -39,175 +39,113 @@ for a in anchors:
         full_url = base_url.rstrip('/') + '/' + correct_href
         unique_urls.add(full_url)
 
-# Create a Google Docs document
-doc_title = f"VisionIAS Current Affairs {previous_date}"
-document = docs_service.documents().create(body={'title': doc_title}).execute()
-document_id = document.get('documentId')
+# Create the PDF using ReportLab
+pdf_file_name = f"visionias_current_affairs_{previous_date}.pdf"
+pdf = canvas.Canvas(pdf_file_name, pagesize=A4)
+pdf.setFont("Helvetica", 12)
+width, height = A4
 
-# Google Translator
-translator = GoogleTranslator(source='auto', target='gu')
+# Registering custom fonts for English and Gujarati
+pdfmetrics.registerFont(TTFont('NotoSans', 'NotoSans-Regular.ttf'))
+pdfmetrics.registerFont(TTFont('NotoSansGujarati', 'NotoSansGujarati-Regular.ttf'))
 
-# Dictionary to store the original content for later writing
-original_content = {}
+y_position = height - inch  # Set initial Y position for drawing text
 
-# Function to scrape content from the provided URL and translate to Gujarati
-def scrap_and_add_content_to_docs(url):
+def write_section_to_pdf(title_gujarati, title_english, content_gujarati, content_english):
+    global y_position
+    
+    if y_position < 1.5 * inch:
+        pdf.showPage()  # Create a new page if content exceeds one page
+        y_position = height - inch
+
+    # Write the titles (Gujarati and English)
+    pdf.setFont("NotoSansGujarati", 14)
+    pdf.drawString(inch, y_position, title_gujarati)
+    y_position -= 0.4 * inch
+
+    pdf.setFont("NotoSans", 14)
+    pdf.drawString(inch, y_position, title_english)
+    y_position -= 0.4 * inch
+
+    # Write the content paragraphs (Gujarati and English)
+    pdf.setFont("NotoSansGujarati", 12)
+    for guj_line in content_gujarati.split('\n'):
+        pdf.drawString(inch, y_position, guj_line)
+        y_position -= 0.3 * inch
+        if y_position < 1.5 * inch:
+            pdf.showPage()
+            y_position = height - inch
+
+    pdf.setFont("NotoSans", 12)
+    for eng_line in content_english.split('\n'):
+        pdf.drawString(inch, y_position, eng_line)
+        y_position -= 0.3 * inch
+        if y_position < 1.5 * inch:
+            pdf.showPage()
+            y_position = height - inch
+
+# Function to scrape content and write to PDF
+def scrape_and_generate_pdf(url):
+    global y_position
     print(f"Scraping: {url}")
     page_response = requests.get(url)
     page_soup = BeautifulSoup(page_response.content, 'html.parser')
 
+    # Find the specific content area div
     content_area = page_soup.find('div', class_="flex flex-col w-full mt-6 lg:mt-0")
-    doc_requests = []  # Requests to send to the Google Docs API
 
     if content_area:
         title = content_area.find('h1').get_text()
         translated_title = translator.translate(title)
-        
-        # Add the translated title to Google Docs
-        doc_requests.append({
-            'insertText': {
-                'location': {'index': 1},
-                'text': f"\n{translated_title}\n"
-            }
-        })
-
-        # Store the original title for later use in English content
-        original_content[url] = {"title": title, "content": []}
 
         # Find article content under the <div id="article-content">
         article_content = content_area.find('div', id='article-content')
+
         if article_content:
+            content_english = ""
+            content_gujarati = ""
+            
             for element in article_content.find_all(recursive=False):
-                if element.name == 'p':
+                if element.name == 'p':  # For paragraphs
                     paragraph_text = element.get_text()
                     translated_paragraph = translator.translate(paragraph_text)
-                    
-                    # Add translated paragraph to Google Docs
-                    doc_requests.append({
-                        'insertText': {
-                            'location': {'index': 1},
-                            'text': f"\n{translated_paragraph}\n"
-                        }
-                    })
-                    # Store the original paragraph for English content
-                    original_content[url]["content"].append({"type": "p", "text": paragraph_text})
 
-                elif element.name == 'h2':
+                    content_english += paragraph_text + "\n"
+                    content_gujarati += translated_paragraph + "\n"
+
+                elif element.name == 'h2':  # For sub-headings
                     sub_heading_text = element.get_text()
                     translated_sub_heading = translator.translate(sub_heading_text)
-                    
-                    # Add translated sub-heading to Google Docs
-                    doc_requests.append({
-                        'insertText': {
-                            'location': {'index': 1},
-                            'text': f"\n{translated_sub_heading}\n"
-                        }
-                    })
-                    # Store the original sub-heading for English content
-                    original_content[url]["content"].append({"type": "h2", "text": sub_heading_text})
 
-                elif element.name == 'ul':  # For unordered lists
-                    list_items = []
+                    content_english += f"\n{sub_heading_text}\n"
+                    content_gujarati += f"\n{translated_sub_heading}\n"
+
+                elif element.name == 'ul':  # For lists
                     for li in element.find_all('li'):
                         list_item_text = li.get_text()
                         translated_list_item = translator.translate(list_item_text)
 
-                        # Add translated list item to Google Docs
-                        doc_requests.append({
-                            'insertText': {
-                                'location': {'index': 1},
-                                'text': f"- {translated_list_item}\n"
-                            }
-                        })
-                        # Store original list item for English content
-                        list_items.append(list_item_text)
-                    original_content[url]["content"].append({"type": "ul", "items": list_items})
+                        content_english += f"- {list_item_text}\n"
+                        content_gujarati += f"- {translated_list_item}\n"
 
                 elif element.name == 'ol':  # For ordered lists
-                    list_items = []
-                    for li in element.find_all('li'):
+                    for idx, li in enumerate(element.find_all('li'), 1):
                         list_item_text = li.get_text()
                         translated_list_item = translator.translate(list_item_text)
 
-                        # Add translated list item to Google Docs
-                        doc_requests.append({
-                            'insertText': {
-                                'location': {'index': 1},
-                                'text': f"1. {translated_list_item}\n"
-                            }
-                        })
-                        # Store original list item for English content
-                        list_items.append(list_item_text)
-                    original_content[url]["content"].append({"type": "ol", "items": list_items})
+                        content_english += f"{idx}. {list_item_text}\n"
+                        content_gujarati += f"{idx}. {translated_list_item}\n"
 
-    # Add the translated content to Google Docs
-    docs_service.documents().batchUpdate(documentId=document_id, body={'requests': doc_requests}).execute()
+            # Write the section to PDF
+            write_section_to_pdf(translated_title, title, content_gujarati, content_english)
 
 # Iterate over unique URLs and scrape content
 for url in unique_urls:
-    scrap_and_add_content_to_docs(url)
+    scrape_and_generate_pdf(url)
 
-# Add a heading for the original English content in Google Docs
-doc_requests = []
-doc_requests.append({
-    'insertText': {
-        'location': {'index': 1},
-        'text': "\nOriginal Content in English\n"
-    }
-})
-docs_service.documents().batchUpdate(documentId=document_id, body={'requests': doc_requests}).execute()
-
-# Write original English content to Google Docs
-for url, content_data in original_content.items():
-    # Add original title
-    doc_requests.append({
-        'insertText': {
-            'location': {'index': 1},
-            'text': f"\n{content_data['title']}\n"
-        }
-    })
-
-    # Add the original content (paragraphs, headings, lists, etc.)
-    for content_item in content_data["content"]:
-        if content_item["type"] == "p":
-            doc_requests.append({
-                'insertText': {
-                    'location': {'index': 1},
-                    'text': f"\n{content_item['text']}\n"
-                }
-            })
-        elif content_item["type"] == "h2":
-            doc_requests.append({
-                'insertText': {
-                    'location': {'index': 1},
-                    'text': f"\n{content_item['text']}\n"
-                }
-            })
-        elif content_item["type"] == "ul":
-            for item in content_item["items"]:
-                doc_requests.append({
-                    'insertText': {
-                        'location': {'index': 1},
-                        'text': f"- {item}\n"
-                    }
-                })
-        elif content_item["type"] == "ol":
-            for item in content_item["items"]:
-                doc_requests.append({
-                    'insertText': {
-                        'location': {'index': 1},
-                        'text': f"1. {item}\n"
-                    }
-                })
-
-# Add the original content to Google Docs
-docs_service.documents().batchUpdate(documentId=document_id, body={'requests': doc_requests}).execute()
-
-# Export the Google Docs document as a PDF
-pdf_file_name = f"visionias_current_affairs_{previous_date}.pdf"
-request = drive_service.files().export_media(fileId=document_id, mimeType='application/pdf')
-with open(pdf_file_name, 'wb') as pdf_file:
-    pdf_file.write(request.execute())
+# Finalize and save the PDF
+pdf.save()
+print(f"PDF saved as {pdf_file_name}")
 
 # Send the PDF file to Telegram
 def send_file_to_telegram(pdf_file):
@@ -220,6 +158,7 @@ def send_file_to_telegram(pdf_file):
     else:
         print(f"Failed to send PDF file. Status code: {response.status_code}, Response: {response.text}")
 
+# Send the generated PDF to Telegram
 send_file_to_telegram(pdf_file_name)
 
 # Optionally, cleanup the local files
