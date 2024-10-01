@@ -27,15 +27,12 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-pip-
     
-    # Install dependencies, including LibreOffice for docx to pdf conversion
-    - name: Install dependencies
+   - name: Install dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install -y libreoffice  # LibreOffice is needed for docx2pdf conversion
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
-    
-    # Run the Python script with the required environment variables
+        pip install -r requirements.txt  # Ensure pypandoc is in your requirements.txt
+        sudo apt-get install -y pandoc texlive-xetex texlive-fonts-recommended texlive-plain-generic
+
     - name: Run the script
       run: |
-        python main.py
+        python main.py  # Replace this with the path to your script
