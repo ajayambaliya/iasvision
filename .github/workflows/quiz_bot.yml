@@ -4,10 +4,11 @@ on:
   push:
     branches:
       - main
-  
+  schedule:
+    - cron: '0 0 * * *'  # This will run daily at midnight (adjust as necessary)
+
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
@@ -24,10 +25,18 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
+    # Step to save Google Credentials to a file
+    - name: Write Google Service Account JSON to file
+      run: |
+        echo "$GOOGLE_APPLICATION_CREDENTIALS" > /home/runner/work/GOOGLE_APPLICATION_CREDENTIALS.json
+      env:
+        GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
+
+    # Run the Python script with the correct env variable pointing to the credentials file
     - name: Run Python Script
       env:
         BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
         CHAT_ID: ${{ secrets.CHAT_ID }}
-        GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
+        GOOGLE_APPLICATION_CREDENTIALS: /home/runner/work/GOOGLE_APPLICATION_CREDENTIALS.json
       run: |
         python main.py
