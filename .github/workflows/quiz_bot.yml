@@ -1,33 +1,28 @@
-name: Telegram Quiz Bot
+name: Python App with Pandoc
 
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
-  run-script:
+  build:
+
     runs-on: ubuntu-latest
-    
+
     steps:
-    - uses: actions/checkout@v2
-    
-    # Set up Python environment
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
     - name: Set up Python
       uses: actions/setup-python@v2
       with:
-        python-version: 3.9
-    
-    # Cache pip dependencies for faster future builds
-    - name: Cache Python packages
-      uses: actions/cache@v2
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
-    
-   - name: Install dependencies
+        python-version: '3.9'
+
+    - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt  # Ensure pypandoc is in your requirements.txt
