@@ -6,7 +6,6 @@ from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 import os
 import pypandoc
 from deep_translator import GoogleTranslator
-import subprocess
 
 # Load environment variables for bot token and chat ID
 BOT_TOKEN = os.getenv('BOT_TOKEN')
@@ -141,13 +140,14 @@ file_name = f"visionias_current_affairs_{previous_date}.docx"
 doc.save(file_name)
 print(f"Document saved as {file_name}")
 
-# Convert DOCX to PDF using pypandoc with XeLaTeX and a Gujarati-compatible font
+# Convert DOCX to PDF using pypandoc with XeLaTeX and separate fonts for English and Gujarati
 def convert_docx_to_pdf(docx_file, pdf_file):
-    # Specify the command-line arguments for pandoc to use xelatex and a specific font
+    # Specify the command-line arguments for pandoc to use xelatex and specific fonts for English and Gujarati
     extra_args = [
         "--pdf-engine=xelatex",
-        "-V", "mainfont=Noto Sans Gujarati",  # Replace with an available Gujarati font
-        "-V", "geometry:margin=1in"  # Set margins, optional
+        "-V", "mainfont=Noto Sans",  # Font for English text
+        "-V", "CJKmainfont=Noto Sans Gujarati",  # Font for Gujarati text
+        "-V", "geometry:margin=1in"  # Set margins
     ]
 
     try:
