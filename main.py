@@ -4,7 +4,6 @@ from datetime import datetime, timedelta
 from deep_translator import GoogleTranslator
 import os
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
 from google.oauth2 import service_account
 
 # Telegram bot credentials
@@ -55,14 +54,14 @@ def scrap_and_add_content_to_docs(url):
     page_soup = BeautifulSoup(page_response.content, 'html.parser')
 
     content_area = page_soup.find('div', class_="flex flex-col w-full mt-6 lg:mt-0")
-    requests = []
+    doc_requests = []  # Renamed this from 'requests' to avoid conflict with the requests module
     
     if content_area:
         title = content_area.find('h1').get_text()
         translated_title = translator.translate(title)
         
         # Add the translated title
-        requests.append({
+        doc_requests.append({
             'insertText': {
                 'location': {'index': 1},
                 'text': f"\n{translated_title}\n"
@@ -76,7 +75,7 @@ def scrap_and_add_content_to_docs(url):
                 if element.name == 'p':
                     paragraph_text = element.get_text()
                     translated_paragraph = translator.translate(paragraph_text)
-                    requests.append({
+                    doc_requests.append({
                         'insertText': {
                             'location': {'index': 1},
                             'text': f"\n{translated_paragraph}\n"
@@ -85,7 +84,7 @@ def scrap_and_add_content_to_docs(url):
                 elif element.name == 'h2':
                     sub_heading_text = element.get_text()
                     translated_sub_heading = translator.translate(sub_heading_text)
-                    requests.append({
+                    doc_requests.append({
                         'insertText': {
                             'location': {'index': 1},
                             'text': f"\n{translated_sub_heading}\n"
@@ -93,7 +92,7 @@ def scrap_and_add_content_to_docs(url):
                     })
 
     # Add content to the Google Docs document
-    docs_service.documents().batchUpdate(documentId=document_id, body={'requests': requests}).execute()
+    docs_service.documents().batchUpdate(documentId=document_id, body={'requests': doc_requests}).execute()
 
 # Iterate over the unique URLs and scrape content
 for url in unique_urls:
