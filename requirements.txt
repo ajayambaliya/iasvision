@@ -1,6 +1,7 @@
-weasyprint
+google-api-python-client
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
 requests
 beautifulsoup4
-python-docx
 deep-translator
-reportlab
