@@ -4,8 +4,9 @@ from datetime import datetime, timedelta
 from docx import Document
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 import os
-import pypandoc
 from deep_translator import GoogleTranslator
+import weasyprint
+import shutil
 
 # Load environment variables for bot token and chat ID
 BOT_TOKEN = os.getenv('BOT_TOKEN')
@@ -41,11 +42,12 @@ doc = Document()
 # Create an instance of the GoogleTranslator to translate to Gujarati
 translator = GoogleTranslator(source='auto', target='gu')
 
-# Dictionary to store the original content for later writing
-original_content = {}
+# Store content in HTML format for conversion
+html_content = "<html><head><style>body { font-family: 'Noto Sans', sans-serif; }</style></head><body>"
 
 # Function to scrape content from the provided URL and translate to Gujarati
 def scrap_and_create_doc(url):
+    global html_content
     print(f"Scraping: {url}")
     page_response = requests.get(url)
     page_soup = BeautifulSoup(page_response.content, 'html.parser')
@@ -57,11 +59,12 @@ def scrap_and_create_doc(url):
         # Extract the title from the <h1> tag
         title = content_area.find('h1').get_text()
         translated_title = translator.translate(title)  # Translate the title to Gujarati
-        # Add title to the Word document (Gujarati content)
+        
+        # Add to DOCX
         doc.add_heading(translated_title, 0).alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-
-        # Store the original title in the dictionary for later use
-        original_content[url] = {"title": title, "content": []}
+        
+        # Add to HTML content
+        html_content += f"<h1 style='text-align: center;'>{translated_title}</h1>"
 
         # Find article content under the <div id="article-content">
         article_content = content_area.find('div', id='article-content')
@@ -72,95 +75,79 @@ def scrap_and_create_doc(url):
                 if element.name == 'p':  # For paragraphs
                     paragraph_text = element.get_text()
                     translated_paragraph = translator.translate(paragraph_text)  # Translate paragraph
-                    # Add Gujarati paragraph to the Word document
+                    
+                    # Add to DOCX
                     paragraph = doc.add_paragraph(translated_paragraph)
                     paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.LEFT
-                    # Store original paragraph for later use
-                    original_content[url]["content"].append({"type": "p", "text": paragraph_text})
+                    
+                    # Add to HTML content
+                    html_content += f"<p>{translated_paragraph}</p>"
 
                 elif element.name == 'h2':  # For sub-headings
                     sub_heading_text = element.get_text()
                     translated_sub_heading = translator.translate(sub_heading_text)  # Translate sub-heading
-                    # Add Gujarati sub-heading to the Word document
+                    
+                    # Add to DOCX
                     doc.add_heading(translated_sub_heading, level=2)
-                    # Store original sub-heading for later use
-                    original_content[url]["content"].append({"type": "h2", "text": sub_heading_text})
+                    
+                    # Add to HTML content
+                    html_content += f"<h2>{translated_sub_heading}</h2>"
 
                 elif element.name == 'ul':  # For lists
-                    list_items = []
+                    html_content += "<ul>"
                     for li in element.find_all('li'):
                         list_item_text = li.get_text()
                         translated_list_item = translator.translate(list_item_text)  # Translate list item
-                        # Add Gujarati list item to the Word document
+                        
+                        # Add to DOCX
                         doc.add_paragraph(translated_list_item, style='List Bullet')
-                        list_items.append(list_item_text)
-                    # Store original list items for later use
-                    original_content[url]["content"].append({"type": "ul", "items": list_items})
+                        
+                        # Add to HTML content
+                        html_content += f"<li>{translated_list_item}</li>"
+                    html_content += "</ul>"
 
                 elif element.name == 'ol':  # For ordered lists
-                    list_items = []
+                    html_content += "<ol>"
                     for li in element.find_all('li'):
                         list_item_text = li.get_text()
                         translated_list_item = translator.translate(list_item_text)  # Translate list item
-                        # Add Gujarati ordered list item to the Word document
+                        
+                        # Add to DOCX
                         doc.add_paragraph(translated_list_item, style='List Number')
-                        list_items.append(list_item_text)
-                    # Store original ordered list items for later use
-                    original_content[url]["content"].append({"type": "ol", "items": list_items})
+                        
+                        # Add to HTML content
+                        html_content += f"<li>{translated_list_item}</li>"
+                    html_content += "</ol>"
 
 # Iterate over unique URLs and scrape content
 for url in unique_urls:
     scrap_and_create_doc(url)
 
-# After writing all Gujarati content, add a heading to separate the original content
-doc.add_page_break()  # Add a page break before original content
-doc.add_heading('Original Content in English', level=1).alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+# Add a heading for the original content in English
+doc.add_page_break()
+doc.add_heading('Original Content in English', level=1)
 
-# Write original content to the document
-for url, content_data in original_content.items():
-    # Add the original title
-    doc.add_heading(content_data["title"], level=0).alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+html_content += "<h1 style='text-align: center;'>Original Content in English</h1>"
 
-    # Add the original content (paragraphs, headings, lists, etc.)
-    for content_item in content_data["content"]:
-        if content_item["type"] == "p":
-            paragraph = doc.add_paragraph(content_item["text"])
-            paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.LEFT
-        elif content_item["type"] == "h2":
-            doc.add_heading(content_item["text"], level=2)
-        elif content_item["type"] == "ul":
-            for item in content_item["items"]:
-                doc.add_paragraph(item, style='List Bullet')
-        elif content_item["type"] == "ol":
-            for item in content_item["items"]:
-                doc.add_paragraph(item, style='List Number')
-
-# Save the document
+# Save the DOCX file
 file_name = f"visionias_current_affairs_{previous_date}.docx"
 doc.save(file_name)
 print(f"Document saved as {file_name}")
 
-# Convert DOCX to PDF using pypandoc with XeLaTeX and specific fonts
-def convert_docx_to_pdf(docx_file, pdf_file):
-    # Specify the command-line arguments for pandoc to use xelatex and specific fonts for English and Gujarati
-    extra_args = [
-        "--pdf-engine=xelatex",
-        "-V", "mainfont=Noto Sans",  # Font for English text
-        "-V", "CJKmainfont=Noto Sans Gujarati",  # Font for Gujarati text
-        "-V", "geometry:margin=1in",  # Set margins
-        "-V", "lang=en-US"  # Avoid defaulting to Chinese/Asian languages
-    ]
-
-    try:
-        output = pypandoc.convert_file(docx_file, 'pdf', outputfile=pdf_file, extra_args=extra_args)
-        assert output == "", "Conversion failed"
-        print(f"Document converted to PDF: {pdf_file}")
-    except RuntimeError as e:
-        print(f"An error occurred: {e}")
-
-# Convert DOCX to PDF
+# Convert HTML content to PDF using WeasyPrint
+html_content += "</body></html>"
 pdf_file_name = f"visionias_current_affairs_{previous_date}.pdf"
-convert_docx_to_pdf(file_name, pdf_file_name)
+
+# Write the HTML to a temporary file for WeasyPrint conversion
+with open("temp.html", "w", encoding='utf-8') as html_file:
+    html_file.write(html_content)
+
+# Use WeasyPrint to convert HTML to PDF
+weasyprint.HTML("temp.html").write_pdf(pdf_file_name)
+
+# Remove the temporary HTML file
+os.remove("temp.html")
+print(f"PDF saved as {pdf_file_name}")
 
 # Send the PDF file to Telegram
 def send_file_to_telegram(pdf_file):
