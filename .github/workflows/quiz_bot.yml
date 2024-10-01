@@ -30,6 +30,9 @@ jobs:
         sudo apt-get install -y fonts-noto-core fonts-lohit-gujr fonts-noto-unhinted  # Install Gujarati fonts
 
 
-    - name: Run the script
+   - name: Run the script
+      env:
+        BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+        CHAT_ID: ${{ secrets.CHAT_ID }}
       run: |
-        python main.py  # Replace this with the path to your script
+        python main.py
