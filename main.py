@@ -4,8 +4,8 @@ from datetime import datetime, timedelta
 from docx import Document
 from docx.shared import Pt
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
-from docx2pdf import convert
 import os
+import pypandoc
 from deep_translator import GoogleTranslator  # Import the deep translator
 
 # Telegram bot credentials
@@ -141,10 +141,15 @@ file_name = f"visionias_current_affairs_{previous_date}.docx"
 doc.save(file_name)
 print(f"Document saved as {file_name}")
 
+# Convert DOCX to PDF using pypandoc
+def convert_docx_to_pdf(docx_file, pdf_file):
+    output = pypandoc.convert_file(docx_file, 'pdf', outputfile=pdf_file)
+    assert output == "", "Conversion failed"
+    print(f"Document converted to PDF: {pdf_file}")
+
 # Convert DOCX to PDF
 pdf_file_name = f"visionias_current_affairs_{previous_date}.pdf"
-convert(file_name, pdf_file_name)
-print(f"Document converted to PDF: {pdf_file_name}")
+convert_docx_to_pdf(file_name, pdf_file_name)
 
 # Send the PDF file to Telegram
 def send_file_to_telegram(pdf_file):
