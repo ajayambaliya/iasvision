@@ -1,12 +1,12 @@
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
-from docx import Document
-from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+from reportlab.lib.units import inch
 import os
 from deep_translator import GoogleTranslator
-import weasyprint
-import shutil
 
 # Load environment variables for bot token and chat ID
 BOT_TOKEN = os.getenv('BOT_TOKEN')
@@ -36,35 +36,24 @@ for a in anchors:
         full_url = base_url.rstrip('/') + '/' + correct_href
         unique_urls.add(full_url)  # Adding to set ensures no duplicates
 
-# Initialize a Word Document
-doc = Document()
-
 # Create an instance of the GoogleTranslator to translate to Gujarati
 translator = GoogleTranslator(source='auto', target='gu')
 
-# Store content in HTML format for conversion
-html_content = "<html><head><style>body { font-family: 'Noto Sans', sans-serif; }</style></head><body>"
-
 # Function to scrape content from the provided URL and translate to Gujarati
-def scrap_and_create_doc(url):
-    global html_content
+def scrap_and_translate_content(url):
     print(f"Scraping: {url}")
     page_response = requests.get(url)
     page_soup = BeautifulSoup(page_response.content, 'html.parser')
 
     # Find the specific content area div
     content_area = page_soup.find('div', class_="flex flex-col w-full mt-6 lg:mt-0")
+    gujarati_content = []
 
     if content_area:
         # Extract the title from the <h1> tag
         title = content_area.find('h1').get_text()
         translated_title = translator.translate(title)  # Translate the title to Gujarati
-        
-        # Add to DOCX
-        doc.add_heading(translated_title, 0).alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-        
-        # Add to HTML content
-        html_content += f"<h1 style='text-align: center;'>{translated_title}</h1>"
+        gujarati_content.append(("title", translated_title))
 
         # Find article content under the <div id="article-content">
         article_content = content_area.find('div', id='article-content')
@@ -75,78 +64,77 @@ def scrap_and_create_doc(url):
                 if element.name == 'p':  # For paragraphs
                     paragraph_text = element.get_text()
                     translated_paragraph = translator.translate(paragraph_text)  # Translate paragraph
-                    
-                    # Add to DOCX
-                    paragraph = doc.add_paragraph(translated_paragraph)
-                    paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.LEFT
-                    
-                    # Add to HTML content
-                    html_content += f"<p>{translated_paragraph}</p>"
+                    gujarati_content.append(("paragraph", translated_paragraph))
 
                 elif element.name == 'h2':  # For sub-headings
                     sub_heading_text = element.get_text()
                     translated_sub_heading = translator.translate(sub_heading_text)  # Translate sub-heading
-                    
-                    # Add to DOCX
-                    doc.add_heading(translated_sub_heading, level=2)
-                    
-                    # Add to HTML content
-                    html_content += f"<h2>{translated_sub_heading}</h2>"
+                    gujarati_content.append(("heading", translated_sub_heading))
 
-                elif element.name == 'ul':  # For lists
-                    html_content += "<ul>"
+                elif element.name == 'ul':  # For unordered lists
+                    list_items = []
                     for li in element.find_all('li'):
                         list_item_text = li.get_text()
                         translated_list_item = translator.translate(list_item_text)  # Translate list item
-                        
-                        # Add to DOCX
-                        doc.add_paragraph(translated_list_item, style='List Bullet')
-                        
-                        # Add to HTML content
-                        html_content += f"<li>{translated_list_item}</li>"
-                    html_content += "</ul>"
+                        list_items.append(translated_list_item)
+                    gujarati_content.append(("ul", list_items))
 
                 elif element.name == 'ol':  # For ordered lists
-                    html_content += "<ol>"
+                    list_items = []
                     for li in element.find_all('li'):
                         list_item_text = li.get_text()
                         translated_list_item = translator.translate(list_item_text)  # Translate list item
-                        
-                        # Add to DOCX
-                        doc.add_paragraph(translated_list_item, style='List Number')
-                        
-                        # Add to HTML content
-                        html_content += f"<li>{translated_list_item}</li>"
-                    html_content += "</ol>"
+                        list_items.append(translated_list_item)
+                    gujarati_content.append(("ol", list_items))
+    
+    return gujarati_content
+
+# Generate PDF using ReportLab
+def generate_pdf(content_list, file_name):
+    pdf = canvas.Canvas(file_name, pagesize=A4)
+    pdf.setFont("Helvetica", 12)
+
+    width, height = A4
+    y_position = height - inch
+
+    for content_type, content in content_list:
+        if content_type == "title":
+            pdf.setFont("Helvetica-Bold", 16)
+            pdf.drawString(inch, y_position, content)
+            y_position -= 0.5 * inch
+        elif content_type == "heading":
+            pdf.setFont("Helvetica-Bold", 14)
+            pdf.drawString(inch, y_position, content)
+            y_position -= 0.4 * inch
+        elif content_type == "paragraph":
+            pdf.setFont("Helvetica", 12)
+            pdf.drawString(inch, y_position, content)
+            y_position -= 0.3 * inch
+        elif content_type == "ul":
+            pdf.setFont("Helvetica", 12)
+            for item in content:
+                pdf.drawString(inch + 20, y_position, f"- {item}")
+                y_position -= 0.3 * inch
+        elif content_type == "ol":
+            pdf.setFont("Helvetica", 12)
+            for idx, item in enumerate(content, 1):
+                pdf.drawString(inch + 20, y_position, f"{idx}. {item}")
+                y_position -= 0.3 * inch
+
+        if y_position < inch:
+            pdf.showPage()
+            y_position = height - inch
+
+    pdf.save()
 
 # Iterate over unique URLs and scrape content
+all_gujarati_content = []
 for url in unique_urls:
-    scrap_and_create_doc(url)
+    all_gujarati_content.extend(scrap_and_translate_content(url))
 
-# Add a heading for the original content in English
-doc.add_page_break()
-doc.add_heading('Original Content in English', level=1)
-
-html_content += "<h1 style='text-align: center;'>Original Content in English</h1>"
-
-# Save the DOCX file
-file_name = f"visionias_current_affairs_{previous_date}.docx"
-doc.save(file_name)
-print(f"Document saved as {file_name}")
-
-# Convert HTML content to PDF using WeasyPrint
-html_content += "</body></html>"
+# Save the generated PDF
 pdf_file_name = f"visionias_current_affairs_{previous_date}.pdf"
-
-# Write the HTML to a temporary file for WeasyPrint conversion
-with open("temp.html", "w", encoding='utf-8') as html_file:
-    html_file.write(html_content)
-
-# Use WeasyPrint to convert HTML to PDF
-weasyprint.HTML("temp.html").write_pdf(pdf_file_name)
-
-# Remove the temporary HTML file
-os.remove("temp.html")
+generate_pdf(all_gujarati_content, pdf_file_name)
 print(f"PDF saved as {pdf_file_name}")
 
 # Send the PDF file to Telegram
@@ -164,5 +152,4 @@ def send_file_to_telegram(pdf_file):
 send_file_to_telegram(pdf_file_name)
 
 # Optionally, cleanup the local files
-os.remove(file_name)
 os.remove(pdf_file_name)
