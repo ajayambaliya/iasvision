@@ -47,26 +47,32 @@ document_id = document.get('documentId')
 # Google Translator
 translator = GoogleTranslator(source='auto', target='gu')
 
-# Function to scrape and add content to Google Docs
+# Dictionary to store the original content for later writing
+original_content = {}
+
+# Function to scrape content from the provided URL and translate to Gujarati
 def scrap_and_add_content_to_docs(url):
     print(f"Scraping: {url}")
     page_response = requests.get(url)
     page_soup = BeautifulSoup(page_response.content, 'html.parser')
 
     content_area = page_soup.find('div', class_="flex flex-col w-full mt-6 lg:mt-0")
-    doc_requests = []  # Renamed this from 'requests' to avoid conflict with the requests module
-    
+    doc_requests = []  # Requests to send to the Google Docs API
+
     if content_area:
         title = content_area.find('h1').get_text()
         translated_title = translator.translate(title)
         
-        # Add the translated title
+        # Add the translated title to Google Docs
         doc_requests.append({
             'insertText': {
                 'location': {'index': 1},
                 'text': f"\n{translated_title}\n"
             }
         })
+
+        # Store the original title for later use in English content
+        original_content[url] = {"title": title, "content": []}
 
         # Find article content under the <div id="article-content">
         article_content = content_area.find('div', id='article-content')
@@ -75,28 +81,127 @@ def scrap_and_add_content_to_docs(url):
                 if element.name == 'p':
                     paragraph_text = element.get_text()
                     translated_paragraph = translator.translate(paragraph_text)
+                    
+                    # Add translated paragraph to Google Docs
                     doc_requests.append({
                         'insertText': {
                             'location': {'index': 1},
                             'text': f"\n{translated_paragraph}\n"
                         }
                     })
+                    # Store the original paragraph for English content
+                    original_content[url]["content"].append({"type": "p", "text": paragraph_text})
+
                 elif element.name == 'h2':
                     sub_heading_text = element.get_text()
                     translated_sub_heading = translator.translate(sub_heading_text)
+                    
+                    # Add translated sub-heading to Google Docs
                     doc_requests.append({
                         'insertText': {
                             'location': {'index': 1},
                             'text': f"\n{translated_sub_heading}\n"
                         }
                     })
+                    # Store the original sub-heading for English content
+                    original_content[url]["content"].append({"type": "h2", "text": sub_heading_text})
 
-    # Add content to the Google Docs document
+                elif element.name == 'ul':  # For unordered lists
+                    list_items = []
+                    for li in element.find_all('li'):
+                        list_item_text = li.get_text()
+                        translated_list_item = translator.translate(list_item_text)
+
+                        # Add translated list item to Google Docs
+                        doc_requests.append({
+                            'insertText': {
+                                'location': {'index': 1},
+                                'text': f"- {translated_list_item}\n"
+                            }
+                        })
+                        # Store original list item for English content
+                        list_items.append(list_item_text)
+                    original_content[url]["content"].append({"type": "ul", "items": list_items})
+
+                elif element.name == 'ol':  # For ordered lists
+                    list_items = []
+                    for li in element.find_all('li'):
+                        list_item_text = li.get_text()
+                        translated_list_item = translator.translate(list_item_text)
+
+                        # Add translated list item to Google Docs
+                        doc_requests.append({
+                            'insertText': {
+                                'location': {'index': 1},
+                                'text': f"1. {translated_list_item}\n"
+                            }
+                        })
+                        # Store original list item for English content
+                        list_items.append(list_item_text)
+                    original_content[url]["content"].append({"type": "ol", "items": list_items})
+
+    # Add the translated content to Google Docs
     docs_service.documents().batchUpdate(documentId=document_id, body={'requests': doc_requests}).execute()
 
-# Iterate over the unique URLs and scrape content
+# Iterate over unique URLs and scrape content
 for url in unique_urls:
     scrap_and_add_content_to_docs(url)
+
+# Add a heading for the original English content in Google Docs
+doc_requests = []
+doc_requests.append({
+    'insertText': {
+        'location': {'index': 1},
+        'text': "\nOriginal Content in English\n"
+    }
+})
+docs_service.documents().batchUpdate(documentId=document_id, body={'requests': doc_requests}).execute()
+
+# Write original English content to Google Docs
+for url, content_data in original_content.items():
+    # Add original title
+    doc_requests.append({
+        'insertText': {
+            'location': {'index': 1},
+            'text': f"\n{content_data['title']}\n"
+        }
+    })
+
+    # Add the original content (paragraphs, headings, lists, etc.)
+    for content_item in content_data["content"]:
+        if content_item["type"] == "p":
+            doc_requests.append({
+                'insertText': {
+                    'location': {'index': 1},
+                    'text': f"\n{content_item['text']}\n"
+                }
+            })
+        elif content_item["type"] == "h2":
+            doc_requests.append({
+                'insertText': {
+                    'location': {'index': 1},
+                    'text': f"\n{content_item['text']}\n"
+                }
+            })
+        elif content_item["type"] == "ul":
+            for item in content_item["items"]:
+                doc_requests.append({
+                    'insertText': {
+                        'location': {'index': 1},
+                        'text': f"- {item}\n"
+                    }
+                })
+        elif content_item["type"] == "ol":
+            for item in content_item["items"]:
+                doc_requests.append({
+                    'insertText': {
+                        'location': {'index': 1},
+                        'text': f"1. {item}\n"
+                    }
+                })
+
+# Add the original content to Google Docs
+docs_service.documents().batchUpdate(documentId=document_id, body={'requests': doc_requests}).execute()
 
 # Export the Google Docs document as a PDF
 pdf_file_name = f"visionias_current_affairs_{previous_date}.pdf"
