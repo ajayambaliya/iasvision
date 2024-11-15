@@ -34,17 +34,17 @@ if missing_vars:
 
 # Channel promotional message
 CHANNEL_PROMO = """
-╔════════════════════════════════════════╗
+╔═════════════════════╗
     📱 Follow Us For More
 • Daily Current Affairs Gujarati: @CurrentAdda
 • For 48000+ Que Quiz and Daily Current Affairs Quiz Use Our bot @GovPrepBuddy_bot
 • Share & Support: Forward to Friends
-╚════════════════════════════════════════╝"""
+╚═════════════════════╝"""
 
 # Formatting decorators
-TITLE_DECORATOR = "🌟━━━━━━━━━━━━━━━━━━━━━━━━━🌟"
-TITLE_DECORATOR_END = "🌟━━━━━━━━━━━━━━━━━━━━━━━━━━🌟"
-SECTION_DIVIDER = "┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄"
+TITLE_DECORATOR = "🌟━━━━━━━━━━━━━━━🌟"
+TITLE_DECORATOR_END = "🌟━━━━━━━━━━━━━━━━🌟"
+SECTION_DIVIDER = "┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄"
 TOPIC_DECORATOR = "📍"
 
 # Logging configuration
