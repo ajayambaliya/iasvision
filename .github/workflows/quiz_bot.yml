@@ -1,11 +1,11 @@
 name: Run Python Script
 
-on:
-  push:
-    branches:
-      - main
-  schedule:
-    - cron: '30 8 * * *'  # Runs daily at 8:30 AM UTC (2:00 PM IST)
+#on:
+ # push:
+   # branches:
+     # - main
+  #schedule:
+    #- cron: '30 8 * * *'  # Runs daily at 8:30 AM UTC (2:00 PM IST)
 
 jobs:
   build:
